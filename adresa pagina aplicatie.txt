@@ -1,0 +1,20 @@
+De completat după urcarea pe GitHub.
+
+Nume sugerat pentru repository: ora-se-da-inapoi
+
+Comenzile, o singură dată, din folderul aplicației:
+
+    git init
+    git add .
+    git commit -m "Prima versiune"
+    git branch -M main
+    git remote add origin https://github.com/Beldugan/ora-se-da-inapoi.git
+    git push -u origin main
+
+Adresa repository-ului:
+https://github.com/Beldugan/ora-se-da-inapoi.git
+
+Pagina live (Settings -> Pages -> Source: GitHub Actions):
+https://beldugan.github.io/ora-se-da-inapoi/
+
+Până atunci aplicația merge local: dublu-click pe index.html.

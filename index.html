@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="ro" data-theme="">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ora se dă înapoi</title>
+<meta name="description" content="Pământul 3D, ceasul Londrei și Soarele: de ce se dă ora înapoi pe 25 octombrie 2026. Cu un laborator în care modifici mișcările planetei și un Laborator al vrăjitoarei de Halloween.">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🕐</text></svg>">
+<link rel="stylesheet" href="assets/css/style.css?v=1">
+</head>
+<body>
+
+<header class="top">
+  <div class="inner">
+    <h1 data-i18n="app.title">Ora se dă înapoi</h1>
+    <div class="badges">
+      <button class="pill" id="langRo" aria-pressed="true">RO</button>
+      <button class="pill" id="langEn" aria-pressed="false">EN</button>
+      <button class="pill" id="themeBtn" title="light / dark">◐</button>
+    </div>
+    <p data-i18n="app.sub">Duminică, 25 octombrie 2026, ora 02:00 devine 01:00 · Pământul, Soarele și ceasul Londrei · un laborator în care schimbi chiar tu mișcările planetei</p>
+  </div>
+</header>
+
+<div class="wrap">
+  <nav class="tabs" role="tablist" id="tabs">
+    <button role="tab" data-tab="planet" aria-selected="true" data-i18n="tab.planet">🌍 Planeta</button>
+    <button role="tab" data-tab="story" aria-selected="false" data-i18n="tab.story">🕐 Noaptea schimbării</button>
+    <button role="tab" data-tab="year" aria-selected="false" data-i18n="tab.year">📊 Lumina anului</button>
+    <button role="tab" data-tab="witch" aria-selected="false" data-i18n="tab.witch" class="tab-halloween">🎃 Laboratorul vrăjitoarei</button>
+    <button role="tab" data-tab="quiz" aria-selected="false" data-i18n="tab.quiz">❓ Test</button>
+  </nav>
+
+  <!-- ===================== PLANETA ===================== -->
+  <section class="panel" id="p-planet">
+    <div class="planet-grid">
+      <div class="stage-col">
+        <div class="stage3d" id="stagePlanet">
+          <div class="loading" id="loading"><div class="spinner"></div><span data-i18n="ui.loading">Se încarcă Pământul…</span></div>
+          <!-- HUD -->
+          <div class="hud hud-tl">
+            <div class="seg" id="viewSeg">
+              <button data-view="near" class="on" data-i18n="view.near">🌍 De aproape</button>
+              <button data-view="orbit" data-i18n="view.orbit">☀️ Pe orbită</button>
+            </div>
+            <div class="seg" id="followSeg">
+              <button data-follow="free" class="on" data-i18n="follow.free">✋ Liber</button>
+              <button data-follow="sun" data-i18n="follow.sun">☀️ Din partea Soarelui</button>
+              <button data-follow="city" data-i18n="follow.city">📍 Urmărește orașul</button>
+            </div>
+          </div>
+          <div class="hud hud-tr" id="hudClock"></div>
+          <div class="hud hud-bl toggles" id="toggles">
+            <label><input type="checkbox" data-opt="clouds" checked> <span data-i18n="opt.clouds">nori</span></label>
+            <label><input type="checkbox" data-opt="lights" checked> <span data-i18n="opt.lights">luminile orașelor</span></label>
+            <label><input type="checkbox" data-opt="axis" checked> <span data-i18n="opt.axis">axa</span></label>
+            <label><input type="checkbox" data-opt="grid" checked> <span data-i18n="opt.grid">ecuator, tropice, paralela orașului</span></label>
+            <label><input type="checkbox" data-opt="moon" checked> <span data-i18n="opt.moon">Luna</span></label>
+          </div>
+          <div class="city-tag" id="cityTag"></div>
+          <div class="orbit-labels" id="orbitLabels"></div>
+          <div class="toast" id="toast"></div>
+        </div>
+
+        <!-- bara timpului -->
+        <div class="timebar card">
+          <div class="tb-row">
+            <button class="btn round" id="playBtn" title="Play / Pauză">⏸</button>
+            <div class="speeds" id="speeds"></div>
+            <input type="datetime-local" id="dtInput" step="60">
+            <span class="tzhint" id="tzHint"></span>
+          </div>
+          <div class="tb-row">
+            <input type="range" id="yearScrub" min="0" max="365" step="0.01" aria-label="ziua anului">
+          </div>
+          <div class="tb-row jumps" id="jumps"></div>
+        </div>
+      </div>
+
+      <aside class="side-col">
+        <div class="card clocks-card">
+          <div class="city-row">
+            <label for="citySel" data-i18n="ui.city">Orașul:</label>
+            <select id="citySel"></select>
+          </div>
+          <div class="clocks">
+            <figure><canvas id="clockWall" width="220" height="220"></canvas><figcaption id="capWall"></figcaption></figure>
+            <figure><canvas id="clockSun" width="220" height="220"></canvas><figcaption id="capSun"></figcaption></figure>
+          </div>
+          <div class="utc" id="utcLine"></div>
+          <canvas id="skyDome" width="440" height="190"></canvas>
+          <dl class="facts" id="facts"></dl>
+        </div>
+
+        <div class="card lab-card">
+          <h3 data-i18n="lab.h">🧪 Laboratorul planetei</h3>
+          <p class="muted small" data-i18n="lab.p">Schimbă mișcările planetei. Ceasul de pe perete rămâne cel „de pe Pământ” (ore de 60 de minute), dar Soarele se va purta altfel.</p>
+          <div class="presets" id="presets"></div>
+          <div class="ctl" id="labCtl"></div>
+          <div class="derived" id="derived"></div>
+          <div class="challenges">
+            <h4 data-i18n="lab.ch">Provocări</h4>
+            <div id="challenges"></div>
+          </div>
+        </div>
+      </aside>
+    </div>
+  </section>
+
+  <!-- ===================== NOAPTEA SCHIMBĂRII ===================== -->
+  <section class="panel hidden" id="p-story">
+    <div class="story-grid">
+      <div>
+        <div class="stage3d small" id="stageStory"><div class="toast"></div></div>
+        <div class="bigclocks">
+          <figure><canvas id="bigWall" width="320" height="320"></canvas><figcaption id="capBig"></figcaption></figure>
+          <div class="hourline" id="hourline"></div>
+        </div>
+      </div>
+      <div>
+        <div class="steps" id="steps"></div>
+        <div class="story-card card" id="storyCard"></div>
+        <div class="story-nav">
+          <button class="btn" id="stPrev" data-i18n="story.prev">◀ Înapoi</button>
+          <button class="btn primary" id="stNext" data-i18n="story.next">Mai departe ▶</button>
+        </div>
+      </div>
+    </div>
+    <div class="why-grid" id="whyGrid"></div>
+  </section>
+
+  <!-- ===================== LUMINA ANULUI ===================== -->
+  <section class="panel hidden" id="p-year">
+    <div class="card">
+      <div class="year-head">
+        <div>
+          <h3 data-i18n="year.h">Când e lumină, când e întuneric — tot anul, pe ceasul de perete</h3>
+          <p class="muted small" data-i18n="year.p">Fiecare coloană e o zi; de jos în sus, orele de la 00:00 la 24:00. Galben = Soarele e sus, albastru închis = noapte. Banda verde e programul de școală (08:30–15:30).</p>
+        </div>
+        <div class="rules" id="rules"></div>
+      </div>
+      <div class="chart-wrap"><canvas id="yearChart" width="1200" height="520"></canvas><div class="tip" id="yearTip"></div></div>
+      <div class="year-stats" id="yearStats"></div>
+    </div>
+  </section>
+
+  <!-- ===================== LABORATORUL VRĂJITOAREI ===================== -->
+  <section class="panel hidden witch" id="p-witch">
+    <div class="witch-head">
+      <h2 data-i18n="witch.h">🎃 Laboratorul vrăjitoarei</h2>
+      <p data-i18n="witch.p">Zece poțiuni adevărate, cu chimie adevărată. Alege o rețetă, ia ingredientele de pe raft, pune-le în vas, apoi amestecă!</p>
+      <div class="witch-score" id="witchScore"></div>
+    </div>
+    <div class="potions" id="potions"></div>
+    <div class="witch-grid">
+      <div class="witch-stage">
+        <canvas id="witchCv" width="960" height="560"></canvas>
+        <div class="shelf" id="shelf"></div>
+      </div>
+      <div class="recipe card" id="recipe"></div>
+    </div>
+    <div class="grimoire card hidden" id="grimoire"></div>
+  </section>
+
+  <!-- ===================== TEST ===================== -->
+  <section class="panel hidden" id="p-quiz">
+    <div class="card quiz" id="quiz"></div>
+  </section>
+
+  <footer class="foot" data-i18n="foot">Texturile Pământului: NASA Blue Marble și Black Marble (domeniu public). Calculele: algoritmul NOAA pentru poziția Soarelui. Fizica distractivă · Eva, 2026.</footer>
+</div>
+
+<script src="assets/vendor/three.min.js"></script>
+<script src="assets/js/textures.js"></script>
+<script src="assets/js/i18n.js"></script>
+<script src="assets/js/astro.js"></script>
+<script src="assets/js/globe.js"></script>
+<script src="assets/js/witch.js"></script>
+<script src="assets/js/app.js"></script>
+</body>
+</html>
