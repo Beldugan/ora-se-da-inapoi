@@ -329,7 +329,7 @@
   /* ==========================================================================
      Bucla principală
      ========================================================================== */
-  let lastFrame = performance.now(), lastSummer = A.euSummer(st.t), lastUI = 0, lastHL = 0;
+  let lastFrame = performance.now(), lastSummer = A.euSummer(st.t), lastUI = 0, lastHL = 0, prevT = st.t;
   const wallAnim = { disp: null };   // pentru acele ceasului mare care se întorc animat
   function frame(now) {
     const dt = Math.min(0.1, (now - lastFrame) / 1000); lastFrame = now;
@@ -338,9 +338,11 @@
     // detectăm schimbarea orei (doar regula reală)
     const sm = A.euSummer(st.t);
     if (sm !== lastSummer) {
-      if (st.speed <= 21600) toast(t_(sm ? 'toast.fwd' : 'toast.back'), 4200);
+      // doar când timpul curge normal (nu la salturi de dată sau la deschiderea simulatorului de eclipse)
+      if (st.speed <= 21600 && Math.abs(st.t - prevT) < 6 * H && !(window.Eclipse && window.Eclipse.state.open)) toast(t_(sm ? 'toast.fwd' : 'toast.back'), 4200);
       lastSummer = sm;
     }
+    prevT = st.t;
     const s = st.model.sun(st.t);
     if (globe && ready && (st.tab === 'planet' || st.tab === 'story')) {
       globe.update(st.model, st.t, st.city, dt);
@@ -628,6 +630,7 @@
     if (st.tab === 'story') buildStory();
     if (st.tab === 'year') { buildRules(); drawYear(); }
     if (window.Witch) window.Witch.relang();
+    if (window.Eclipse) window.Eclipse.relang();
     invalidate();
   }
   $('#langRo').onclick = () => { L.set('ro'); relang(); };
@@ -654,6 +657,8 @@
     if (q.get('tab')) switchTab(q.get('tab'));
     lastSummer = A.euSummer(st.t); buildTimebar(); syncPlay();
   } catch (e) {}
-  window.APP = { st, switchTab, setView, setFollow, preset, challenge };
+  window.APP = { st, switchTab, setView, setFollow, preset, challenge, globe };
+  $('#eclBtn').onclick = () => window.Eclipse && window.Eclipse.open();
+  if (window.Eclipse) window.Eclipse.relang();
   requestAnimationFrame(frame);
 })();

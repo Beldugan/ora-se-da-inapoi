@@ -43,7 +43,26 @@
   const earthFS = `
     uniform sampler2D dayMap, nightMap, waterMap, topoMap, cloudMap;
     uniform vec3 sunDir; uniform float cloudShift, lights, bumpK, twilightW, cloudsOn;
+    uniform float eclOn, sunAng, eclRing; uniform vec3 moonPosT;
     varying vec2 vUv; varying vec3 vN; varying vec3 vE; varying vec3 vNo; varying vec3 vPos;
+    // fracțiunea din discul Soarelui (raza rs) acoperită de un disc (raza rm), centrele la distanța d (radiani)
+    float overlapFrac(float rs, float rm, float d){
+      if (d >= rs + rm) return 0.0;
+      if (d <= abs(rm - rs)) return rm >= rs ? 1.0 : (rm * rm) / (rs * rs);
+      float a1 = acos(clamp((d*d + rs*rs - rm*rm) / (2.0*d*rs), -1.0, 1.0));
+      float a2 = acos(clamp((d*d + rm*rm - rs*rs) / (2.0*d*rm), -1.0, 1.0));
+      float k = sqrt(max(0.0, (-d + rs + rm) * (d + rs - rm) * (d - rs + rm) * (d + rs + rm)));
+      return clamp((rs*rs*a1 + rm*rm*a2 - 0.5*k) / (3.14159265 * rs * rs), 0.0, 1.0);
+    }
+    // cât din Soare acoperă Luna, văzut din punctul P (umbra eclipsei de Soare)
+    float moonCover(vec3 P){
+      if (eclOn < 0.5) return 0.0;
+      vec3 toM = moonPosT - P; float dm = length(toM); vec3 m = toM / dm;
+      if (dot(m, sunDir) <= 0.0) return 0.0;
+      float sep = asin(min(1.0, length(cross(m, sunDir))));
+      float rm = asin(0.2727 / dm);
+      return overlapFrac(sunAng, rm, sep);
+    }
     void main(){
       vec3 N0 = normalize(vN);
       // relief din harta de altitudine (diferențe finite în spațiul texturii)
@@ -61,13 +80,19 @@
       float lit = clamp(0.16 + ndl * 1.05, 0.0, 1.0) * smoothstep(-0.12, 0.02, ndlG);
       // lumina de apus: roșiatică lângă terminator
       vec3 sunset = mix(vec3(1.0, 0.45, 0.18), vec3(1.0), smoothstep(0.0, 0.35, ndlG));
-      vec3 col = day * lit * sunset * 1.08;
+      float cv = moonCover(vPos), ecl = 1.0 - cv;   // umbra Lunii
+      vec3 col = day * lit * sunset * 1.08 * ecl;
+      // contur opțional: marginea penumbrei (portocaliu) și a umbrei (roșu)
+      float ringP = step(0.0004, cv) * (1.0 - smoothstep(0.0004, 0.025, cv));
+      float ringU = smoothstep(0.985, 0.999, cv) * (1.0 - step(0.99999, cv));
+      col = mix(col, vec3(1.0, 0.62, 0.2), ringP * 0.75 * eclRing * dayF);
+      col = mix(col, vec3(1.0, 0.15, 0.2), ringU * 0.9 * eclRing * dayF);
       // luciul oceanului
       vec3 V = normalize(cameraPosition - vPos);
       vec3 R = reflect(-sunDir, N0);
       float water = texture2D(waterMap, vUv).r;
       float spec = pow(max(dot(R, V), 0.0), 38.0) * water * 0.75;
-      col += vec3(1.0, 0.93, 0.8) * spec * dayF;
+      col += vec3(1.0, 0.93, 0.8) * spec * dayF * ecl;
       // noaptea: luminile orașelor
       vec3 night = texture2D(nightMap, vUv).rgb;
       vec3 cityL = max(night - vec3(0.06, 0.08, 0.12), 0.0) * vec3(1.6, 1.25, 0.8) * 2.4 * lights;
@@ -81,12 +106,31 @@
     }`;
   const cloudFS = `
     uniform sampler2D cloudMap; uniform vec3 sunDir; uniform float cloudShift, cloudsOn;
+    uniform float eclOn, sunAng; uniform vec3 moonPosT;
     varying vec2 vUv; varying vec3 vN; varying vec3 vE; varying vec3 vNo; varying vec3 vPos;
+    // fracțiunea din discul Soarelui (raza rs) acoperită de un disc (raza rm), centrele la distanța d (radiani)
+    float overlapFrac(float rs, float rm, float d){
+      if (d >= rs + rm) return 0.0;
+      if (d <= abs(rm - rs)) return rm >= rs ? 1.0 : (rm * rm) / (rs * rs);
+      float a1 = acos(clamp((d*d + rs*rs - rm*rm) / (2.0*d*rs), -1.0, 1.0));
+      float a2 = acos(clamp((d*d + rm*rm - rs*rs) / (2.0*d*rm), -1.0, 1.0));
+      float k = sqrt(max(0.0, (-d + rs + rm) * (d + rs - rm) * (d - rs + rm) * (d + rs + rm)));
+      return clamp((rs*rs*a1 + rm*rm*a2 - 0.5*k) / (3.14159265 * rs * rs), 0.0, 1.0);
+    }
+    // cât din Soare acoperă Luna, văzut din punctul P (umbra eclipsei de Soare)
+    float moonCover(vec3 P){
+      if (eclOn < 0.5) return 0.0;
+      vec3 toM = moonPosT - P; float dm = length(toM); vec3 m = toM / dm;
+      if (dot(m, sunDir) <= 0.0) return 0.0;
+      float sep = asin(min(1.0, length(cross(m, sunDir))));
+      float rm = asin(0.2727 / dm);
+      return overlapFrac(sunAng, rm, sep);
+    }
     void main(){
       float a = texture2D(cloudMap, vUv + vec2(cloudShift, 0.0)).r;
       float ndl = dot(normalize(vN), sunDir);
       float lit = smoothstep(-0.12, 0.3, ndl);
-      vec3 c = mix(vec3(1.0, 0.55, 0.3), vec3(1.0), smoothstep(0.0, 0.3, ndl)) * lit;
+      vec3 c = mix(vec3(1.0, 0.55, 0.3), vec3(1.0), smoothstep(0.0, 0.3, ndl)) * lit * (1.0 - moonCover(vPos));
       gl_FragColor = vec4(c, a * 0.92 * cloudsOn);
     }`;
   const atmoVS = `
@@ -117,6 +161,34 @@
       float limb = pow(max(dot(normalize(vN), V), 0.0), 0.45);
       vec3 c = mix(vec3(1.0, 0.45, 0.05), vec3(1.0, 0.95, 0.7), n) * (0.55 + 0.6*limb);
       gl_FragColor = vec4(c, 1.0);
+    }`;
+
+  const moonVS = `
+    varying vec2 vUv; varying vec3 vN; varying vec3 vPos;
+    void main(){ vUv = uv; vN = normalize(mat3(modelMatrix) * normal); vec4 wp = modelMatrix * vec4(position,1.0); vPos = wp.xyz;
+      gl_Position = projectionMatrix * viewMatrix * wp; }`;
+  const moonFS = `
+    uniform sampler2D map; uniform vec3 sunDir; uniform float sunAng;
+    varying vec2 vUv; varying vec3 vN; varying vec3 vPos;
+    float overlapFrac(float rs, float rm, float d){
+      if (d >= rs + rm) return 0.0;
+      if (d <= abs(rm - rs)) return rm >= rs ? 1.0 : (rm * rm) / (rs * rs);
+      float a1 = acos(clamp((d*d + rs*rs - rm*rm) / (2.0*d*rs), -1.0, 1.0));
+      float a2 = acos(clamp((d*d + rm*rm - rs*rs) / (2.0*d*rm), -1.0, 1.0));
+      float k = sqrt(max(0.0, (-d + rs + rm) * (d + rs - rm) * (d - rs + rm) * (d + rs + rm)));
+      return clamp((rs*rs*a1 + rm*rm*a2 - 0.5*k) / (3.14159265 * rs * rs), 0.0, 1.0);
+    }
+    void main(){
+      vec3 tex = texture2D(map, vUv).rgb;
+      float ndl = max(dot(normalize(vN), sunDir), 0.0);
+      // umbra Pământului: cât din Soare ascunde Pământul (raza 1, atmosfera +2 %) văzut din acest punct
+      float dE = length(vPos); vec3 e = -vPos / dE;
+      float cov = 0.0;
+      if (dot(e, sunDir) > 0.0) cov = overlapFrac(sunAng, asin(1.02 / dE), asin(min(1.0, length(cross(e, sunDir)))));
+      // în umbră ajunge doar lumina roșie, curbată prin atmosfera Pământului (toate apusurile Pământului)
+      vec3 red = vec3(0.62, 0.22, 0.08) * smoothstep(0.75, 1.0, cov) * 0.55;
+      vec3 col = tex * (ndl * (1.0 - cov) + red * (0.4 + 0.6 * ndl)) + tex * 0.015;
+      gl_FragColor = vec4(col, 1.0);
     }`;
 
   /* ---------------- control al camerei (fără dependențe) ---------------- */
@@ -210,7 +282,8 @@
     const uni = this.uni = {
       dayMap: { value: tex.day }, nightMap: { value: tex.night }, waterMap: { value: tex.water },
       topoMap: { value: tex.topo }, cloudMap: { value: tex.clouds }, sunDir: { value: new T.Vector3(1, 0, 0) },
-      cloudShift: { value: 0 }, lights: { value: 1 }, bumpK: { value: 2.2 }, twilightW: { value: 0.06 }, cloudsOn: { value: 1 }
+      cloudShift: { value: 0 }, lights: { value: 1 }, bumpK: { value: 2.2 }, twilightW: { value: 0.06 }, cloudsOn: { value: 1 },
+      eclOn: { value: 0 }, eclRing: { value: 1 }, sunAng: { value: 0.004653 }, moonPosT: { value: new T.Vector3(0, 0, 1000) }
     };
     const mats = {
       earth: new T.ShaderMaterial({ uniforms: uni, vertexShader: earthVS, fragmentShader: earthFS }),
@@ -248,6 +321,9 @@
     // Luna (distanța e micșorată de ~7 ori ca să încapă pe ecran)
     this.moon = new T.Mesh(new T.SphereGeometry(0.2727, 64, 32), new T.MeshStandardMaterial({ map: tex.moon, roughness: 1, metalness: 0 }));
     S.add(this.moon);
+    this.moonStd = this.moon.material;
+    this.moonEcl = new T.ShaderMaterial({ uniforms: { map: { value: tex.moon }, sunDir: uni.sunDir, sunAng: uni.sunAng }, vertexShader: moonVS, fragmentShader: moonFS });
+    this.ecl = null;   // { M: Vector3 (poziția adevărată a Lunii, în raze terestre), cam: 'solar' | 'lunar', sunAng }
     this.sunLight = new T.DirectionalLight(0xffffff, 1.6); S.add(this.sunLight); S.add(this.sunLight.target);
     S.add(new T.AmbientLight(0x111122, 0.25));
 
@@ -381,14 +457,18 @@
       this.pin.position.copy(p); this.pin.quaternion.setFromUnitVectors(new T.Vector3(0, 1, 0), p.clone().normalize());
     }
     const pulse = 1 + 0.25 * Math.sin(performance.now() / 260);
-    this.pinHead.scale.setScalar(pulse);
+    this.pinHead.scale.setScalar(this.ecl ? 0.45 : pulse);
 
     if (this.view === 'near') {
       this.sunSprite.position.copy(sunDir).multiplyScalar(300);
       this.sunLight.position.copy(sunDir).multiplyScalar(50);
       // Luna
-      const showMoon = this.opts.moon && model.isEarth();
-      this.moon.visible = showMoon;
+      const E = this.ecl;
+      this.uni.eclOn.value = E ? 1 : 0;
+      this.moon.material = E ? this.moonEcl : this.moonStd;
+      if (E) { this.uni.moonPosT.value.copy(E.M); this.uni.sunAng.value = E.sunAng; this.moon.position.copy(E.M); this.moon.visible = true; this.moon.lookAt(0, 0, 0); this.moon.rotateY(Math.PI); }
+      const showMoon = !E && this.opts.moon && model.isEarth();
+      if (!E) this.moon.visible = showMoon;
       if (showMoon) {
         const mp = A.moonPos(t), L = mp.lam * D2R, B = mp.beta * D2R, R = 8.5;
         this.moon.position.set(R * Math.cos(B) * Math.cos(L), R * Math.sin(B), -R * Math.cos(B) * Math.sin(L));
@@ -397,10 +477,14 @@
       // camera
       const f = this.opts.follow;
       this.scene().updateMatrixWorld(true);
+      if (E && E.cam === 'lunar') {
+        this.ctlN.target.copy(E.M);
+        this.ctlN.lookFrom(E.M.clone().normalize().negate().add(new T.Vector3(0.25, 0.3, 0.1)));
+      } else if (this.ctlN.target.lengthSq() > 1e-6) this.ctlN.target.set(0, 0, 0);
       if (f === 'sun') this.ctlN.lookFrom(sunDir.clone().add(new T.Vector3(0, 0.25, 0)));
       else if (f === 'city') {
         const w = new T.Vector3(); this.pin.getWorldPosition(w);
-        this.ctlN.lookFrom(w.clone().add(new T.Vector3(0, 0.15, 0)));
+        this.ctlN.lookFrom(E ? w.clone().add(this.uni.sunDir.value.clone().multiplyScalar(0.35)) : w.clone().add(new T.Vector3(0, 0.15, 0)));
       }
       this.ctlN.update();
       this.renderer.render(this.near, this.camN);
@@ -433,6 +517,8 @@
     const visible = n.dot(camDir) > 0.05;
     return Object.assign(this.project(w), { visible });
   };
+  /** poziția orașului în coordonatele scenei (după rotație) */
+  Globe.prototype.cityWorld = function () { const w = new T.Vector3(); this.near.updateMatrixWorld(true); this.pinHead.getWorldPosition(w); return w.multiplyScalar(1 / 1.06 * 1.0).setLength(1); };
   Globe.prototype.snapshot = function () { return this.canvas.toDataURL('image/png'); };
 
   window.Globe = Globe;
